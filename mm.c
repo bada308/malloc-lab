@@ -63,13 +63,16 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t))) // size_t의 크기를 ALIGNMENT의 배수로 올림한 결과
 
+/* function prototype */
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void *first_fit(size_t asize);
 static void *next_fit(size_t asize);
 static void *best_fit(size_t asize);
+static void *worst_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
+/* global variable*/
 char *heap_listp; // 프롤로그 블록을 가리키는 포인터
 char *rover;      // next fit 사용 시 이전에 할당된 블록을 가리키는 포인터
 
@@ -122,7 +125,7 @@ void *mm_malloc(size_t size)
         adjusted_size = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
     }
 
-    if ((bp = best_fit(adjusted_size)) != NULL)
+    if ((bp = worst_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
         return bp;
@@ -335,6 +338,36 @@ static void *best_fit(size_t asize)
     }
 
     return best;
+}
+
+/**
+ * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. worst fit 알고리즘 사용
+ *
+ * @param asize 할당하려는 크기
+ * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
+ */
+static void *worst_fit(size_t asize)
+{
+    void *bp;
+    void *worst = NULL;
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    {
+        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
+        {
+            if (worst == NULL)
+            {
+                worst = bp;
+                continue;
+            }
+            if (GET_SIZE(worst) < GET_SIZE(bp))
+            {
+                worst = bp;
+            }
+        }
+    }
+
+    return worst;
 }
 
 /**
