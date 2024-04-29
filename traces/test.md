@@ -1,0 +1,1 @@
+main protection rule 적용 테스트
