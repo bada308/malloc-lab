@@ -67,6 +67,7 @@ static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void *first_fit(size_t asize);
 static void *next_fit(size_t asize);
+static void *best_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
 char *heap_listp; // 프롤로그 블록을 가리키는 포인터
@@ -88,7 +89,7 @@ int mm_init(void)
     PUT(heap_listp + 3 * WSIZE, PACK(0, 1));     /* 에필로그 블록 */
 
     heap_listp += 2 * WSIZE;
-    rover = heap_listp; // FIXME: next fit 사용 시에만 유효함
+    rover = heap_listp;
 
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
     {
@@ -121,7 +122,7 @@ void *mm_malloc(size_t size)
         adjusted_size = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
     }
 
-    if ((bp = next_fit(adjusted_size)) != NULL)
+    if ((bp = best_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
         return bp;
@@ -276,10 +277,10 @@ static void *first_fit(size_t asize)
 }
 
 /**
- * @brief
+ * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. next fit 알고리즘 사용
  *
- * @param asize
- * @return void*
+ * @param asize 할당하려는 크기
+ * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
  */
 static void *next_fit(size_t asize)
 {
@@ -304,6 +305,36 @@ static void *next_fit(size_t asize)
         }
     }
     return NULL;
+}
+
+/**
+ * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. best fit 알고리즘 사용
+ *
+ * @param asize 할당하려는 크기
+ * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
+ */
+static void *best_fit(size_t asize)
+{
+    void *bp;
+    void *best = NULL;
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    {
+        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
+        {
+            if (best == NULL)
+            {
+                best = bp;
+                continue;
+            }
+            if (GET_SIZE(best) > GET_SIZE(bp))
+            {
+                best = bp;
+            }
+        }
+    }
+
+    return best;
 }
 
 /**
