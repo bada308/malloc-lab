@@ -34,6 +34,14 @@ team_t team = {
     /* Second member's email address (leave blank if none) */
     ""};
 
+/* single word (4) or double word (8) alignment */
+#define ALIGNMENT 8
+
+/* rounds up to the nearest multiple of ALIGNMENT */
+#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
+
+#define SIZE_T_SIZE (ALIGN(sizeof(size_t))) // size_t의 크기를 ALIGNMENT의 배수로 올림한 결과
+
 /* Basic constants and macros */
 #define WSIZE 4             /* 워드의 크기 (바이트) */
 #define DSIZE 8             /* 더블워드의 크기 (바이트) */
@@ -55,44 +63,38 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))       /* 다음 블록의 주소 계산 */
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(HDRP(bp) - WSIZE)) /* 이전 블록의 주소 계산 */
 
-/* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
-
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
-
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t))) // size_t의 크기를 ALIGNMENT의 배수로 올림한 결과
+/* explicit */
+#define GET_PRED(bp) (*(void **)(bp))                   /* 이전 가용 블록의 주소 */
+#define GET_SUCC(bp) (*(void **)((char *)(bp) + WSIZE)) /* 다음 가용 블록의 주소 */
 
 /* function prototype */
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
 static void *first_fit(size_t asize);
-static void *next_fit(size_t asize);
-static void *best_fit(size_t asize);
-static void *worst_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
+static void splice_free_block(void *bp); // 가용 리스트에서 제거
+static void add_free_block(void *bp);    // 가용 리스트에 추가
+
 /* global variable*/
-char *heap_listp; // 프롤로그 블록을 가리키는 포인터
-char *rover;      // next fit 사용 시 이전에 할당된 블록을 가리키는 포인터
+char *free_listp; // 프롤로그 블록을 가리키는 포인터
 
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
+    if ((free_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
     {
         return -1;
     }
 
-    PUT(heap_listp, 0);                          /* Alignment padding */
-    PUT(heap_listp + 1 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 header */
-    PUT(heap_listp + 2 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 footer */
-    PUT(heap_listp + 3 * WSIZE, PACK(0, 1));     /* 에필로그 블록 */
+    PUT(free_listp, 0);                          /* Alignment padding */
+    PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 header */
+    PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 footer */
+    PUT(free_listp + 3 * WSIZE, PACK(0, 1));     /* 에필로그 블록 */
 
-    heap_listp += 2 * WSIZE;
-    rover = heap_listp;
+    free_listp += 2 * WSIZE;
 
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
     {
@@ -125,7 +127,7 @@ void *mm_malloc(size_t size)
         adjusted_size = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
     }
 
-    if ((bp = worst_fit(adjusted_size)) != NULL)
+    if ((bp = first_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
         return bp;
@@ -223,10 +225,7 @@ static void *coalesce(void *bp)
     /* Case 2 - 다음 블록만 free */
     else if (prev_alloc && !next_alloc)
     {
-        if (rover == NEXT_BLKP(bp))
-        {
-            rover = bp;
-        }
+
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -234,10 +233,7 @@ static void *coalesce(void *bp)
     /* Case 3 - 이전 블록만 free */
     else if (!prev_alloc && next_alloc)
     {
-        if (rover == bp)
-        {
-            rover = PREV_BLKP(bp);
-        }
+
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -246,10 +242,7 @@ static void *coalesce(void *bp)
     /* Case 4 - 이전 블록과 다음 블록 모두 free */
     else
     {
-        if (rover == bp || rover == NEXT_BLKP(bp))
-        {
-            rover = PREV_BLKP(bp);
-        }
+
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
@@ -267,8 +260,8 @@ static void *coalesce(void *bp)
 static void *first_fit(size_t asize)
 {
     void *bp;
-    /* 힙 리스트 순회하며 asize 크기를 할당할 수 있는 첫 번째 free 블록 탐색 */
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    /* 가용 연결 리스트 순회하며 asize 크기를 할당할 수 있는 첫 번째 free 블록 탐색 */
+    for (bp = free_listp; GET_SUCC(bp) != NULL; bp = GET_SUCC(bp))
     {
         if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
         {
@@ -277,97 +270,6 @@ static void *first_fit(size_t asize)
     }
     /* 적합한 블록을 찾지 못한 경우 NULL 반환 */
     return NULL;
-}
-
-/**
- * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. next fit 알고리즘 사용
- *
- * @param asize 할당하려는 크기
- * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
- */
-static void *next_fit(size_t asize)
-{
-    void *bp;
-    void *old_rover = rover;
-
-    for (bp = rover; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
-        {
-            rover = NEXT_BLKP(bp);
-            return bp;
-        }
-    }
-
-    for (bp = heap_listp; bp < old_rover; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
-        {
-            rover = NEXT_BLKP(bp);
-            return bp;
-        }
-    }
-    return NULL;
-}
-
-/**
- * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. best fit 알고리즘 사용
- *
- * @param asize 할당하려는 크기
- * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
- */
-static void *best_fit(size_t asize)
-{
-    void *bp;
-    void *best = NULL;
-
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
-        {
-            if (best == NULL)
-            {
-                best = bp;
-                continue;
-            }
-            if (GET_SIZE(best) > GET_SIZE(bp))
-            {
-                best = bp;
-            }
-        }
-    }
-
-    return best;
-}
-
-/**
- * @brief asize만큼 할당할 수 있는 free 블록을 찾는 함수. worst fit 알고리즘 사용
- *
- * @param asize 할당하려는 크기
- * @return void* asize 크기를 할당할 수 있는 free 블록의 포인터. 적합한 블록을 찾지 못하면 NULL 반환
- */
-static void *worst_fit(size_t asize)
-{
-    void *bp;
-    void *worst = NULL;
-
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
-        {
-            if (worst == NULL)
-            {
-                worst = bp;
-                continue;
-            }
-            if (GET_SIZE(worst) < GET_SIZE(bp))
-            {
-                worst = bp;
-            }
-        }
-    }
-
-    return worst;
 }
 
 /**
