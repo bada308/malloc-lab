@@ -241,9 +241,9 @@ static void *extend_heap(size_t words)
  */
 static void *coalesce(void *bp)
 {
-    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-    size_t size = GET_SIZE(HDRP(bp));
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp))); // 이전 블록의 할당 여부
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp))); // 다음 블록의 할당 여부
+    size_t size = GET_SIZE(HDRP(bp));                   // 현재 블록의 크기
 
     /* Case 1 - 이전 블록과 다음 블록 모두 할당됨 */
     if (prev_alloc && next_alloc)
@@ -253,7 +253,6 @@ static void *coalesce(void *bp)
     /* Case 2 - 다음 블록만 free */
     else if (prev_alloc && !next_alloc)
     {
-
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -261,7 +260,6 @@ static void *coalesce(void *bp)
     /* Case 3 - 이전 블록만 free */
     else if (!prev_alloc && next_alloc)
     {
-
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -270,7 +268,6 @@ static void *coalesce(void *bp)
     /* Case 4 - 이전 블록과 다음 블록 모두 free */
     else
     {
-
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
@@ -300,7 +297,7 @@ static void *first_fit(size_t asize)
     return NULL;
 }
 
-/** TODO:
+/**
  * @brief 주어진 블록에 asize 크기를 할당하는 함수
  *
  * @param bp 할당할 블록의 포인터
@@ -315,16 +312,19 @@ static void place(void *bp, size_t asize)
     {
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
+        splice_free_block(bp);
 
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(current_size - asize, 0));
         PUT(FTRP(bp), PACK(current_size - asize, 0));
+        add_free_block(bp);
     }
     /* 분할이 필요하지 않은 경우 - 남은 블록의 크기가 2 * DSIZE보다 작음 */
     else
     {
         PUT(HDRP(bp), PACK(current_size, 1));
         PUT(FTRP(bp), PACK(current_size, 1));
+        splice_free_block(bp);
     }
 }
 
