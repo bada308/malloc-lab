@@ -73,8 +73,8 @@ static void *coalesce(void *bp);
 static void *first_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
-static void splice_free_block(void *bp); // 가용 리스트에서 제거
-static void add_free_block(void *bp);    // 가용 리스트에 추가
+static void splice_free_block(void *bp); /* 가용 리스트에서 제거 */
+static void add_free_block(void *bp);    /* 가용 리스트에 추가 */
 
 /* global variable*/
 char *free_listp; // 프롤로그 블록을 가리키는 포인터
@@ -298,4 +298,22 @@ static void place(void *bp, size_t asize)
         PUT(HDRP(bp), PACK(current_size, 1));
         PUT(FTRP(bp), PACK(current_size, 1));
     }
+}
+
+/**
+ * @brief 가용 리스트에서 제거
+ *
+ * @param bp
+ */
+static void splice_free_block(void *bp)
+{
+}
+
+/**
+ * @brief 가용 리스트에 추가
+ *
+ * @param bp
+ */
+static void add_free_block(void *bp)
+{
 }
