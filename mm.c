@@ -64,6 +64,9 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(HDRP(bp) - WSIZE)) /* 이전 블록의 주소 계산 */
 
 /* explicit */
+#define PRED(bp) ((char *)bp)           /* 블록의 pred 주소 계산 */
+#define SUCC(bp) ((char *)(bp) + WSIZE) /* 블록의 succ 주소 계산 */
+
 #define GET_PRED(bp) (*(void **)(bp))                   /* 이전 가용 블록의 주소 */
 #define GET_SUCC(bp) (*(void **)((char *)(bp) + WSIZE)) /* 다음 가용 블록의 주소 */
 
@@ -318,11 +321,34 @@ static void splice_free_block(void *bp)
 {
 }
 
-/** TODO:
- * @brief 가용 리스트에 추가
+/**
+ * @brief 가용 리스트에 블록을 추가하는 함수
  *
- * @param bp
+ * @param bp 가용 리스트에 추가할 블록의 포인터
  */
 static void add_free_block(void *bp)
 {
+    char *curr = free_listp;     // 현재 블록의 포인터
+    char *next = GET_SUCC(curr); // 다음 블록의 포인터
+
+    /* 가용 리스트를 순회하며 적절한 위치 탐색 */
+    while (next != NULL)
+    {
+        /* 새로운 블록이 현재 블록과 다음 블록 사이에 위치해야 하는 경우 리스트에 삽입 */
+        if (curr < bp && bp < next)
+        {
+            PUT(SUCC(curr), bp);
+            PUT(SUCC(bp), next);
+            PUT(PRED(next), bp);
+            PUT(PRED(bp), curr);
+            return;
+        }
+        curr = next;
+        next = GET_SUCC(next);
+    }
+
+    /* 새로운 블록이 가용 리스트 마지막에 추가되는 경우 */
+    PUT(SUCC(curr), bp);
+    PUT(PRED(bp), curr);
+    PUT(SUCC(bp), NULL);
 }
