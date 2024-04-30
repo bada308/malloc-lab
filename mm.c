@@ -312,13 +312,23 @@ static void place(void *bp, size_t asize)
     }
 }
 
-/** TODO:
- * @brief 가용 리스트에서 제거
+/**
+ * @brief 가용 리스트에서 블록을 제거하는 함수
  *
- * @param bp
+ * @param bp 가용 리스트에서 제거할 블록의 포인터
  */
 static void splice_free_block(void *bp)
 {
+    char *pred = GET_PRED(bp); // 제거할 블록의 이전 가용 블록의 포인터
+    char *succ = GET_SUCC(bp); // 제거할 블록의 다음 가용 블록의 포인터
+
+    /* 이전 가용 블록이 NULL이 아닌 경우 다음 블록을 succ로 연결 */
+    if (pred != NULL)
+        PUT(SUCC(pred), succ);
+
+    /* 다음 가용 블록이 NULL이 아닌 경우 이전 블록을 pred로 연결 */
+    if (succ != NULL)
+        PUT(PRED(succ), pred);
 }
 
 /**
