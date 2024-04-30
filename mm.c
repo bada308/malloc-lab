@@ -154,10 +154,6 @@ void *mm_malloc(size_t size)
     return NULL;
 }
 
-/* TODO:
- * mm_free - Freeing a block does nothing.
- */
-
 /**
  * @brief 메모리를 해제하는 함수
  *
@@ -176,25 +172,35 @@ void mm_free(void *bp)
     coalesce(bp);
 }
 
-/* TODO:
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+/**
+ * @brief 메모리 블록의 크기를 재할당하는 함수
+ *
+ * @param ptr 크기를 재할당할 메모리 블록의 포인터
+ * @param size 재할당할 크기
+ * @return void* 재할당된 메모리 블록의 포인터. 할당에 실패하면 NULL 반환
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr; /* 기존 블록 포인터 */
-    void *newptr;       /* 새롭게 재할당한 블록 포인터*/
-    size_t copySize;    /* 복사할 데이터의 크기 */
+    void *oldptr = ptr; // 기존 블록 포인터
+    void *newptr;       // 새롭게 재할당한 블록 포인터
+    size_t copySize;    // 복사할 데이터의 크기
 
     newptr = mm_malloc(size);
-    if (newptr == NULL) /* 할당 불가할 시 NULL 리턴 */
+
+    /* 할당 불가할 시 NULL 리턴 */
+    if (newptr == NULL)
         return NULL;
 
     copySize = GET_SIZE(HDRP(ptr));
 
+    /* 요청된 크기가 기존 블록의 크기보다 작은 경우, 복사할 크기를 요청된 크기로 설정 */
     if (size < copySize)
         copySize = size;
+
+    /* 기존 블록의 데이터를 새로운 블록으로 복사 후 해제*/
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
+
     return newptr;
 }
 
