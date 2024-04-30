@@ -79,31 +79,37 @@ static void add_free_block(void *bp);    /* 가용 리스트에 추가 */
 /* global variable*/
 char *free_listp; // 프롤로그 블록을 가리키는 포인터
 
+/**
+ * 블록에 저장할 정보: header, footer, pred, succ
+ * → 최소 블록 크기 == 4 * WSIZE
+ */
+
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
-    if ((free_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)
-    {
+    if ((free_listp = mem_sbrk(8 * WSIZE)) == (void *)-1)
         return -1;
-    }
 
-    PUT(free_listp, 0);                          /* Alignment padding */
-    PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 header */
-    PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 footer */
-    PUT(free_listp + 3 * WSIZE, PACK(0, 1));     /* 에필로그 블록 */
+    PUT(free_listp, 0);                              /* 정렬 패딩 */
+    PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1));     /* 프롤로그 header */
+    PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1));     /* 프롤로그 footer */
+    PUT(free_listp + 3 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block header */
+    PUT(free_listp + 4 * WSIZE, NULL);               /* first free block pred */
+    PUT(free_listp + 5 * WSIZE, NULL);               /* first free block succ */
+    PUT(free_listp + 6 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block footer */
+    PUT(free_listp + 7 * WSIZE, PACK(0, 1));         /* 에필로그 블록 */
 
-    free_listp += 2 * WSIZE;
+    free_listp += 4 * WSIZE;
 
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
-    {
         return -1;
-    }
+
     return 0;
 }
 
-/*
+/* TODO:
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
@@ -142,7 +148,7 @@ void *mm_malloc(size_t size)
     return bp;
 }
 
-/*
+/* TODO:
  * mm_free - Freeing a block does nothing.
  */
 void mm_free(void *bp)
@@ -154,7 +160,7 @@ void mm_free(void *bp)
     coalesce(bp);
 }
 
-/*
+/* TODO:
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
 void *mm_realloc(void *ptr, size_t size)
@@ -176,7 +182,7 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-/**
+/** TODO:
  * @brief 주어진 워드 수만큼 힙을 확장하고, 새로 생성된 블록을 반환하는 함수
  *
  * @param words 힙에 추가할 워드의 개수
@@ -205,7 +211,7 @@ static void *extend_heap(size_t words)
     return coalesce(bp);
 }
 
-/**
+/** TODO:
  * @brief 현재 블록 앞뒤에 있는 free 블록을 연결하는 함수
  *
  * @param bp 현재 블록 포인터
@@ -251,7 +257,7 @@ static void *coalesce(void *bp)
     return bp;
 }
 
-/**
+/** TODO:
  * @brief asize만큼 할당할 수 있는 첫 번째 free 블록을 찾는 함수
  *
  * @param asize 할당하려는 크기
@@ -272,7 +278,7 @@ static void *first_fit(size_t asize)
     return NULL;
 }
 
-/**
+/** TODO:
  * @brief 주어진 블록에 asize 크기를 할당하는 함수
  *
  * @param bp 할당할 블록의 포인터
@@ -300,7 +306,7 @@ static void place(void *bp, size_t asize)
     }
 }
 
-/**
+/** TODO:
  * @brief 가용 리스트에서 제거
  *
  * @param bp
@@ -309,7 +315,7 @@ static void splice_free_block(void *bp)
 {
 }
 
-/**
+/** TODO:
  * @brief 가용 리스트에 추가
  *
  * @param bp
