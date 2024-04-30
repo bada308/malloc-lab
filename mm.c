@@ -84,8 +84,10 @@ char *free_listp; // 프롤로그 블록을 가리키는 포인터
  * → 최소 블록 크기 == 4 * WSIZE
  */
 
-/*
- * mm_init - initialize the malloc package.
+/**
+ * @brief malloc 패키지 초기화 함수
+ *
+ * @return int 초기화 성공 시 0 반환, 실패 시 -1 반환
  */
 int mm_init(void)
 {
@@ -109,43 +111,44 @@ int mm_init(void)
     return 0;
 }
 
-/* TODO:
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+/**
+ * @brief 메모리를 할당하는 함수
+ *
+ * @param size 할당하려는 메모리 크기
+ * @return void*  할당된 메모리 블록의 포인터. 할당에 실패하면 NULL 반환
  */
 void *mm_malloc(size_t size)
 {
-    size_t adjusted_size;
-    size_t extend_size;
-    char *bp;
+    size_t adjusted_size; // 정렬을 위해 조정된 메모리 크기
+    size_t extend_size;   // 힙을 확장할 크기
+    char *bp;             // 할당된 블록의 포인터
 
+    /* 요청 크기가 0인 경우 NULL 반환 */
     if (size == 0)
-    {
         return NULL;
-    }
 
+    /* 할당할 메모리 크기를 DSIZE의 배수로 정렬 */
     if (size <= DSIZE)
-    {
         adjusted_size = 2 * DSIZE;
-    }
     else
-    {
         adjusted_size = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
-    }
 
+    /* 할당 가능한 블록 탐색 후 배치 */
     if ((bp = first_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
         return bp;
     }
 
+    /* 할당 가능한 블록이 존재하지 않는 경우 힙 확장 후 배치 */
     extend_size = MAX(adjusted_size, CHUNKSIZE);
-    if ((bp = extend_heap(extend_size / WSIZE)) == NULL)
+    if ((bp = extend_heap(extend_size / WSIZE)) != NULL)
     {
-        return NULL;
+        place(bp, adjusted_size);
+        return bp;
     }
-    place(bp, adjusted_size);
-    return bp;
+
+    return NULL;
 }
 
 /* TODO:
