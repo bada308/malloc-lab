@@ -276,7 +276,7 @@ static void *coalesce(void *bp)
     return bp;
 }
 
-/** TODO:
+/**
  * @brief asize만큼 할당할 수 있는 첫 번째 free 블록을 찾는 함수
  *
  * @param asize 할당하려는 크기
@@ -284,14 +284,13 @@ static void *coalesce(void *bp)
  */
 static void *first_fit(size_t asize)
 {
-    void *bp;
+    void *bp = free_listp;
     /* 가용 연결 리스트 순회하며 asize 크기를 할당할 수 있는 첫 번째 free 블록 탐색 */
-    for (bp = free_listp; GET_SUCC(bp) != NULL; bp = GET_SUCC(bp))
+    while (bp != NULL)
     {
-        if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
-        {
+        if (GET_SIZE(HDRP(bp)) >= asize)
             return bp;
-        }
+        bp = GET_SUCC(bp);
     }
     /* 적합한 블록을 찾지 못한 경우 NULL 반환 */
     return NULL;
