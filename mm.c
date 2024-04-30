@@ -43,9 +43,9 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t))) // size_t의 크기를 ALIGNMENT의 배수로 올림한 결과
 
 /* Basic constants and macros */
-#define WSIZE 4             /* 워드의 크기 (바이트) */
-#define DSIZE 8             /* 더블워드의 크기 (바이트) */
-#define CHUNKSIZE (1 << 12) /* 힙을 이민큼 확장 (바이트) */
+#define WSIZE 4            /* 워드의 크기 (바이트) */
+#define DSIZE 8            /* 더블워드의 크기 (바이트) */
+#define CHUNKSIZE (1 << 6) /* 힙을 이민큼 확장 (바이트) */
 
 #define MAX(x, y) ((x > y) ? (x) : (y)) /* 두 값 중 최대값 반환 */
 
@@ -348,22 +348,22 @@ static void remove_free_block(void *bp)
  */
 static void add_free_block(void *bp)
 {
-    char *curr = free_listp;     // 현재 블록의 포인터
-    char *next = GET_SUCC(curr); // 다음 블록의 포인터
-
     /* 리스트가 비어있는 경우 */
-    if (curr == NULL)
+    if (free_listp == NULL)
     {
         free_listp = bp;
         GET_SUCC(bp) = NULL;
         return;
     }
 
+    char *curr = free_listp;     // 현재 블록의 포인터
+    char *next = GET_SUCC(curr); // 다음 블록의 포인터
+
     /* 가용 리스트를 순회하며 적절한 위치 탐색 */
     while (next != NULL)
     {
         /* 새로운 블록이 현재 블록과 다음 블록 사이에 위치해야 하는 경우 리스트에 삽입 */
-        if (curr < (char *)bp)
+        if (curr < (char *)bp && (char *)bp < next)
             break;
 
         curr = next;
