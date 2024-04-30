@@ -157,12 +157,22 @@ void *mm_malloc(size_t size)
 /* TODO:
  * mm_free - Freeing a block does nothing.
  */
+
+/**
+ * @brief 메모리를 해제하는 함수
+ *
+ * @param bp 해제할 메모리 블록의 포인터
+ */
 void mm_free(void *bp)
 {
-    size_t size = GET_SIZE(HDRP(bp)); /* 해제할 블록의 크기 */
+    size_t size = GET_SIZE(HDRP(bp)); // 해제할 블록의 크기
 
+    /* header, footer 설정 */
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
+    /* 가용 리스트에 추가 - pred, succ 설정 */
+    add_free_block(bp);
+
     coalesce(bp);
 }
 
