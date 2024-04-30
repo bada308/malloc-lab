@@ -51,8 +51,8 @@ team_t team = {
 
 #define PACK(size, alloc) ((size) | (alloc)) /* 크기와 할당 비트를 워드로 패킹 */
 
-#define GET(p) (*(unsigned int *)(p))              /* 주소에서 워드 읽기 */
-#define PUT(p, val) (*(unsigned int *)(p) = (val)) /* 주소에 워드 쓰기 */
+#define GET(p) (*(unsigned int *)(p))                            /* 주소에서 워드 읽기 */
+#define PUT(p, val) (*(unsigned int *)(p) = (unsigned int)(val)) /* 주소에 워드 쓰기 */
 
 #define GET_SIZE(p) (GET(p) & ~0x7) /* 주소 p에서 크기 필드를 읽음 */
 #define GET_ALLOC(p) (GET(p) & 0x1) /* 주소 p에서 할당 필드를 읽음 */
@@ -76,7 +76,7 @@ static void *coalesce(void *bp);
 static void *first_fit(size_t asize);
 static void place(void *bp, size_t asize);
 
-static void splice_free_block(void *bp); /* 가용 리스트에서 제거 */
+static void remove_free_block(void *bp); /* 가용 리스트에서 제거 */
 static void add_free_block(void *bp);    /* 가용 리스트에 추가 */
 
 /* global variable*/
@@ -97,16 +97,16 @@ int mm_init(void)
     if ((free_listp = mem_sbrk(8 * WSIZE)) == (void *)-1)
         return -1;
 
-    PUT(free_listp, 0);                              /* 정렬 패딩 */
-    PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1));     /* 프롤로그 header */
-    PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1));     /* 프롤로그 footer */
+    PUT(free_listp, 0);                          /* 정렬 패딩 */
+    PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 header */
+    PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 footer */
+    free_listp += 4 * WSIZE;
+
     PUT(free_listp + 3 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block header */
     PUT(free_listp + 4 * WSIZE, NULL);               /* first free block pred */
     PUT(free_listp + 5 * WSIZE, NULL);               /* first free block succ */
     PUT(free_listp + 6 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block footer */
     PUT(free_listp + 7 * WSIZE, PACK(0, 1));         /* 에필로그 블록 */
-
-    free_listp += 4 * WSIZE;
 
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
@@ -253,6 +253,7 @@ static void *coalesce(void *bp)
     /* Case 2 - 다음 블록만 free */
     else if (prev_alloc && !next_alloc)
     {
+        remove_free_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -260,6 +261,7 @@ static void *coalesce(void *bp)
     /* Case 3 - 이전 블록만 free */
     else if (!prev_alloc && next_alloc)
     {
+        remove_free_block(bp);
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -268,6 +270,8 @@ static void *coalesce(void *bp)
     /* Case 4 - 이전 블록과 다음 블록 모두 free */
     else
     {
+        remove_free_block(bp);
+        remove_free_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
@@ -311,7 +315,7 @@ static void place(void *bp, size_t asize)
     {
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-        splice_free_block(bp);
+        remove_free_block(bp);
 
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(current_size - asize, 0));
@@ -323,7 +327,7 @@ static void place(void *bp, size_t asize)
     {
         PUT(HDRP(bp), PACK(current_size, 1));
         PUT(FTRP(bp), PACK(current_size, 1));
-        splice_free_block(bp);
+        remove_free_block(bp);
     }
 }
 
@@ -332,7 +336,7 @@ static void place(void *bp, size_t asize)
  *
  * @param bp 가용 리스트에서 제거할 블록의 포인터
  */
-static void splice_free_block(void *bp)
+static void remove_free_block(void *bp)
 {
     char *pred = GET_PRED(bp); // 제거할 블록의 이전 가용 블록의 포인터
     char *succ = GET_SUCC(bp); // 제거할 블록의 다음 가용 블록의 포인터
@@ -360,7 +364,7 @@ static void add_free_block(void *bp)
     while (next != NULL)
     {
         /* 새로운 블록이 현재 블록과 다음 블록 사이에 위치해야 하는 경우 리스트에 삽입 */
-        if (curr < bp && bp < next)
+        if (curr < (char *)bp)
         {
             PUT(SUCC(curr), bp);
             PUT(SUCC(bp), next);
