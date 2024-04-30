@@ -24,11 +24,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "ateam",
+    "Team 4",
     /* First member's full name */
-    "Harry Bovik",
+    "강바다",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "gangbada890@gmail.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -64,9 +64,6 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp)-GET_SIZE(HDRP(bp) - WSIZE)) /* 이전 블록의 주소 계산 */
 
 /* explicit */
-#define PRED(bp) ((char *)bp)           /* 블록의 pred 주소 계산 */
-#define SUCC(bp) ((char *)(bp) + WSIZE) /* 블록의 succ 주소 계산 */
-
 #define GET_PRED(bp) (*(void **)(bp))                   /* 이전 가용 블록의 주소 */
 #define GET_SUCC(bp) (*(void **)((char *)(bp) + WSIZE)) /* 다음 가용 블록의 주소 */
 
@@ -83,11 +80,6 @@ static void add_free_block(void *bp);    /* 가용 리스트에 추가 */
 char *free_listp; // 프롤로그 블록을 가리키는 포인터
 
 /**
- * 블록에 저장할 정보: header, footer, pred, succ
- * → 최소 블록 크기 == 4 * WSIZE
- */
-
-/**
  * @brief malloc 패키지 초기화 함수
  *
  * @return int 초기화 성공 시 0 반환, 실패 시 -1 반환
@@ -100,13 +92,15 @@ int mm_init(void)
     PUT(free_listp, 0);                          /* 정렬 패딩 */
     PUT(free_listp + 1 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 header */
     PUT(free_listp + 2 * WSIZE, PACK(DSIZE, 1)); /* 프롤로그 footer */
-    free_listp += 4 * WSIZE;
 
     PUT(free_listp + 3 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block header */
     PUT(free_listp + 4 * WSIZE, NULL);               /* first free block pred */
     PUT(free_listp + 5 * WSIZE, NULL);               /* first free block succ */
     PUT(free_listp + 6 * WSIZE, PACK(4 * WSIZE, 0)); /* first free block footer */
-    PUT(free_listp + 7 * WSIZE, PACK(0, 1));         /* 에필로그 블록 */
+
+    PUT(free_listp + 7 * WSIZE, PACK(0, 1)); /* 에필로그 블록 */
+
+    free_listp += 4 * WSIZE;
 
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
@@ -166,8 +160,6 @@ void mm_free(void *bp)
     /* header, footer 설정 */
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
-    /* 가용 리스트에 추가 - pred, succ 설정 */
-    add_free_block(bp);
 
     coalesce(bp);
 }
@@ -226,14 +218,12 @@ static void *extend_heap(size_t words)
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
-    /* 가용 리스트에 추가 - pred, succ 설정 */
-    add_free_block(bp);
 
     /* 이전 블록이 free 상태라면, 새로운 블록과 이전 블록을 병합 */
     return coalesce(bp);
 }
 
-/** TODO:
+/**
  * @brief 현재 블록 앞뒤에 있는 free 블록을 연결하는 함수
  *
  * @param bp 현재 블록 포인터
@@ -248,6 +238,7 @@ static void *coalesce(void *bp)
     /* Case 1 - 이전 블록과 다음 블록 모두 할당됨 */
     if (prev_alloc && next_alloc)
     {
+        add_free_block(bp);
         return bp;
     }
     /* Case 2 - 다음 블록만 free */
@@ -257,11 +248,11 @@ static void *coalesce(void *bp)
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        add_free_block(bp);
     }
     /* Case 3 - 이전 블록만 free */
     else if (!prev_alloc && next_alloc)
     {
-        remove_free_block(bp);
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -270,7 +261,6 @@ static void *coalesce(void *bp)
     /* Case 4 - 이전 블록과 다음 블록 모두 free */
     else
     {
-        remove_free_block(bp);
         remove_free_block(NEXT_BLKP(bp));
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
@@ -313,9 +303,9 @@ static void place(void *bp, size_t asize)
     /* 분할이 필요한 경우 - 남은 블록의 크기가 2 * DSIZE보다 큼*/
     if ((current_size - asize) >= 2 * DSIZE)
     {
+        remove_free_block(bp);
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-        remove_free_block(bp);
 
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(current_size - asize, 0));
@@ -338,16 +328,17 @@ static void place(void *bp, size_t asize)
  */
 static void remove_free_block(void *bp)
 {
-    char *pred = GET_PRED(bp); // 제거할 블록의 이전 가용 블록의 포인터
-    char *succ = GET_SUCC(bp); // 제거할 블록의 다음 가용 블록의 포인터
+    /* 삭제하려는 블록이 루트일 경우 */
+    if (bp == free_listp)
+    {
+        free_listp = GET_SUCC(free_listp);
+        return;
+    }
 
-    /* 이전 가용 블록이 NULL이 아닌 경우 다음 블록을 succ로 연결 */
-    if (pred != NULL)
-        PUT(SUCC(pred), succ);
+    GET_SUCC(GET_PRED(bp)) = GET_SUCC(bp);
 
-    /* 다음 가용 블록이 NULL이 아닌 경우 이전 블록을 pred로 연결 */
-    if (succ != NULL)
-        PUT(PRED(succ), pred);
+    if (GET_SUCC(bp) != NULL)
+        GET_PRED(GET_SUCC(bp)) = GET_PRED(bp);
 }
 
 /**
@@ -360,24 +351,30 @@ static void add_free_block(void *bp)
     char *curr = free_listp;     // 현재 블록의 포인터
     char *next = GET_SUCC(curr); // 다음 블록의 포인터
 
+    /* 리스트가 비어있는 경우 */
+    if (curr == NULL)
+    {
+        free_listp = bp;
+        GET_SUCC(bp) = NULL;
+        return;
+    }
+
     /* 가용 리스트를 순회하며 적절한 위치 탐색 */
     while (next != NULL)
     {
         /* 새로운 블록이 현재 블록과 다음 블록 사이에 위치해야 하는 경우 리스트에 삽입 */
         if (curr < (char *)bp)
-        {
-            PUT(SUCC(curr), bp);
-            PUT(SUCC(bp), next);
-            PUT(PRED(next), bp);
-            PUT(PRED(bp), curr);
-            return;
-        }
+            break;
+
         curr = next;
-        next = GET_SUCC(next);
+        next = GET_SUCC(curr);
     }
 
     /* 새로운 블록이 가용 리스트 마지막에 추가되는 경우 */
-    PUT(SUCC(curr), bp);
-    PUT(PRED(bp), curr);
-    PUT(SUCC(bp), NULL);
+    GET_SUCC(curr) = bp;
+    GET_SUCC(bp) = next;
+    GET_PRED(bp) = curr;
+
+    if (next != NULL)
+        GET_PRED(next) = bp;
 }
