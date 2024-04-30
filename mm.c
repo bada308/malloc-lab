@@ -204,7 +204,7 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-/** TODO:
+/**
  * @brief 주어진 워드 수만큼 힙을 확장하고, 새로 생성된 블록을 반환하는 함수
  *
  * @param words 힙에 추가할 워드의 개수
@@ -215,21 +215,21 @@ static void *extend_heap(size_t words)
     char *bp;    // 새로 확장된 힙 영역에서의 블록 포인터
     size_t size; // 힙을 확장할 바이트 크기
 
-    // 확장할 크기를 워드 단위에서 바이트 단위로 변환
+    /* 확장할 크기를 워드 단위에서 바이트 단위로 변환 */
     size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
 
-    // 힙을 확장하고, 새로운 블록의 포인터를 얻음
+    /* brk 증가 */
     if ((long)(bp = mem_sbrk(size)) == -1)
-    {
         return NULL;
-    }
 
-    // 새로운 블록의 헤더와 푸터 설정 후 에필로그 블록 설정
+    /* header, footer, 에필로그 블록 설정 */
     PUT(HDRP(bp), PACK(size, 0));
     PUT(FTRP(bp), PACK(size, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
+    /* 가용 리스트에 추가 - pred, succ 설정 */
+    add_free_block(bp);
 
-    // 이전 블록이 free 상태라면, 새로운 블록과 이전 블록을 병합
+    /* 이전 블록이 free 상태라면, 새로운 블록과 이전 블록을 병합 */
     return coalesce(bp);
 }
 
