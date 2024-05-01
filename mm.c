@@ -24,11 +24,11 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "ateam",
+    "Team 4",
     /* First member's full name */
-    "Harry Bovik",
+    "Kang Bada",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "gangbada890@gmail.com",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -128,6 +128,7 @@ void *mm_malloc(size_t size)
     if ((bp = next_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
+        rover = bp;
         return bp;
     }
 
@@ -137,6 +138,7 @@ void *mm_malloc(size_t size)
         return NULL;
     }
     place(bp, adjusted_size);
+    rover = bp;
     return bp;
 }
 
@@ -155,61 +157,48 @@ void mm_free(void *bp)
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
-// void *mm_realloc(void *ptr, size_t size)
-// {
-//     void *oldptr = ptr; /* 기존 블록 포인터 */
-//     void *newptr;       /* 새롭게 재할당한 블록 포인터*/
-//     size_t copySize;    /* 복사할 데이터의 크기 */
-
-//     newptr = mm_malloc(size);
-//     if (newptr == NULL) /* 할당 불가할 시 NULL 리턴 */
-//         return NULL;
-
-//     copySize = GET_SIZE(HDRP(ptr));
-
-//     if (size < copySize)
-//         copySize = size;
-//     memcpy(newptr, oldptr, copySize);
-//     mm_free(oldptr);
-//     return newptr;
-// }
-
-void *mm_realloc(void *ptr, size_t size)
+void *mm_realloc(void *ptr, size_t size) // ptr은 이전에 할당된 메모리 블록의 포인터, size는 새로운 메모리 블록의 크기
 {
-    void *oldptr = ptr;
+    void *oldptr = ptr; // 현재 블록 포인터
     void *newptr;
 
-    size_t originsize = GET_SIZE(HDRP(oldptr)); // 기존에 할당된 크기
-    size_t newsize = size + DSIZE;              // 새롭게 할당 요청 받은 크기
-
-    /* 새로 요청받은 크기가 기존 크기보다 작은 경우 */
-    if (newsize <= originsize)
+    size_t oldsize = GET_SIZE(HDRP(oldptr)); // 현재 블록 사이즈 = oldsize
+    if (size + DSIZE <= oldsize)
     {
+        place(ptr, size + DSIZE);
         return oldptr;
     }
-    else
+    else if (GET_SIZE(HDRP(NEXT_BLKP(ptr))) != 0 && size > oldsize) // 다음 블록이 epilogue block이 아니고, 재할당할 블록의 사이즈가 현재 블록의 사이즈 보다 클 경우
     {
-        size_t addsize = originsize + GET_SIZE(HDRP(NEXT_BLKP(oldptr))); // 기존 블록의 크기 + 다음 블록의 크기
-
-        /* 다음 블록이 가용 블록이고 현재 블록과 연결했을 때 요청받은 크기를 수용할 수 있는 경우 */
-        if (!GET_ALLOC(HDRP(NEXT_BLKP(oldptr))) && (newsize <= addsize))
+        size_t nextsize = GET_SIZE(HDRP(NEXT_BLKP(oldptr)));            // 다음 블륵의 크기 = nextsize
+        size_t addsize = size - oldsize + DSIZE;                        //
+        if (!GET_ALLOC(HDRP(NEXT_BLKP(oldptr))) && addsize <= nextsize) // 다음 블록이 가용상태이고,
         {
-            /* coalesce */
-            PUT(HDRP(oldptr), PACK(addsize, 1));
-            PUT(FTRP(oldptr), PACK(addsize, 1));
+            if (nextsize - addsize > 8 * DSIZE)
+            {
+                PUT(HDRP(oldptr), PACK(addsize + oldsize, 1));
+                PUT(FTRP(oldptr), PACK(addsize + oldsize, 1));
+                PUT(HDRP(NEXT_BLKP(oldptr)), PACK(nextsize - addsize, 0));
+                PUT(FTRP(NEXT_BLKP(oldptr)), PACK(nextsize - addsize, 0));
+            }
+            else
+            {
+                PUT(HDRP(oldptr), PACK(nextsize + oldsize, 1));
+                PUT(FTRP(oldptr), PACK(nextsize + oldsize, 1));
+            }
+
             return oldptr;
         }
-        else
-        {
-            /* 새로운 블록 할당하고 반환 */
-            newptr = mm_malloc(newsize);
-            if (newptr == NULL)
-                return NULL;
-            memmove(newptr, oldptr, newsize);
-            mm_free(oldptr);
-            return newptr;
-        }
     }
+    newptr = mm_malloc(size);
+    if (newptr == NULL)
+        return NULL;
+    oldsize = GET_SIZE(ptr) - DSIZE;
+    if (size < oldsize)
+        oldsize = size;
+    memcpy(newptr, oldptr, oldsize);
+    mm_free(oldptr);
+    return newptr;
 }
 
 /**
@@ -282,9 +271,10 @@ static void *coalesce(void *bp)
         bp = PREV_BLKP(bp);
     }
 
-    if (HDRP(bp) < rover && rover < FTRP(bp))
-        rover = bp;
+    // if (bp < rover && rover < FTRP(bp))
+    //     rover = bp;
 
+    rover = bp;
     return bp;
 }
 
@@ -324,7 +314,6 @@ static void *next_fit(size_t asize)
     {
         if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
         {
-            rover = NEXT_BLKP(bp);
             return bp;
         }
     }
@@ -333,7 +322,6 @@ static void *next_fit(size_t asize)
     {
         if (!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize)
         {
-            rover = NEXT_BLKP(bp);
             return bp;
         }
     }
