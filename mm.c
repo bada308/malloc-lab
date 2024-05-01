@@ -125,7 +125,7 @@ void *mm_malloc(size_t size)
         adjusted_size = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
     }
 
-    if ((bp = worst_fit(adjusted_size)) != NULL)
+    if ((bp = next_fit(adjusted_size)) != NULL)
     {
         place(bp, adjusted_size);
         return bp;
