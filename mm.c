@@ -179,24 +179,29 @@ void *mm_realloc(void *ptr, size_t size)
     void *oldptr = ptr;
     void *newptr;
 
-    size_t originsize = GET_SIZE(HDRP(oldptr));
-    size_t newsize = size + DSIZE;
+    size_t originsize = GET_SIZE(HDRP(oldptr)); // 기존에 할당된 크기
+    size_t newsize = size + DSIZE;              // 새롭게 할당 요청 받은 크기
 
+    /* 새로 요청받은 크기가 기존 크기보다 작은 경우 */
     if (newsize <= originsize)
     {
         return oldptr;
     }
     else
     {
-        size_t addsize = originsize + GET_SIZE(HDRP(NEXT_BLKP(oldptr)));
+        size_t addsize = originsize + GET_SIZE(HDRP(NEXT_BLKP(oldptr))); // 기존 블록의 크기 + 다음 블록의 크기
+
+        /* 다음 블록이 가용 블록이고 현재 블록과 연결했을 때 요청받은 크기를 수용할 수 있는 경우 */
         if (!GET_ALLOC(HDRP(NEXT_BLKP(oldptr))) && (newsize <= addsize))
         {
+            /* coalesce */
             PUT(HDRP(oldptr), PACK(addsize, 1));
             PUT(FTRP(oldptr), PACK(addsize, 1));
             return oldptr;
         }
         else
         {
+            /* 새로운 블록 할당하고 반환 */
             newptr = mm_malloc(newsize);
             if (newptr == NULL)
                 return NULL;
@@ -256,10 +261,6 @@ static void *coalesce(void *bp)
     /* Case 2 - 다음 블록만 free */
     else if (prev_alloc && !next_alloc)
     {
-        if (rover == NEXT_BLKP(bp))
-        {
-            rover = bp;
-        }
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -267,10 +268,6 @@ static void *coalesce(void *bp)
     /* Case 3 - 이전 블록만 free */
     else if (!prev_alloc && next_alloc)
     {
-        if (rover == bp)
-        {
-            rover = PREV_BLKP(bp);
-        }
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
@@ -279,15 +276,15 @@ static void *coalesce(void *bp)
     /* Case 4 - 이전 블록과 다음 블록 모두 free */
     else
     {
-        if (rover == bp || rover == NEXT_BLKP(bp))
-        {
-            rover = PREV_BLKP(bp);
-        }
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
+
+    if (HDRP(bp) < rover && rover < FTRP(bp))
+        rover = bp;
+
     return bp;
 }
 
@@ -422,6 +419,7 @@ static void place(void *bp, size_t asize)
         bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(current_size - asize, 0));
         PUT(FTRP(bp), PACK(current_size - asize, 0));
+        bp = PREV_BLKP(bp);
     }
     /* 분할이 필요하지 않은 경우 - 남은 블록의 크기가 2 * DSIZE보다 작음 */
     else
