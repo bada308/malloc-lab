@@ -155,23 +155,56 @@ void mm_free(void *bp)
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
+// void *mm_realloc(void *ptr, size_t size)
+// {
+//     void *oldptr = ptr; /* 기존 블록 포인터 */
+//     void *newptr;       /* 새롭게 재할당한 블록 포인터*/
+//     size_t copySize;    /* 복사할 데이터의 크기 */
+
+//     newptr = mm_malloc(size);
+//     if (newptr == NULL) /* 할당 불가할 시 NULL 리턴 */
+//         return NULL;
+
+//     copySize = GET_SIZE(HDRP(ptr));
+
+//     if (size < copySize)
+//         copySize = size;
+//     memcpy(newptr, oldptr, copySize);
+//     mm_free(oldptr);
+//     return newptr;
+// }
+
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr; /* 기존 블록 포인터 */
-    void *newptr;       /* 새롭게 재할당한 블록 포인터*/
-    size_t copySize;    /* 복사할 데이터의 크기 */
+    void *oldptr = ptr;
+    void *newptr;
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL) /* 할당 불가할 시 NULL 리턴 */
-        return NULL;
+    size_t originsize = GET_SIZE(HDRP(oldptr));
+    size_t newsize = size + DSIZE;
 
-    copySize = GET_SIZE(HDRP(ptr));
-
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    if (newsize <= originsize)
+    {
+        return oldptr;
+    }
+    else
+    {
+        size_t addsize = originsize + GET_SIZE(HDRP(NEXT_BLKP(oldptr)));
+        if (!GET_ALLOC(HDRP(NEXT_BLKP(oldptr))) && (newsize <= addsize))
+        {
+            PUT(HDRP(oldptr), PACK(addsize, 1));
+            PUT(FTRP(oldptr), PACK(addsize, 1));
+            return oldptr;
+        }
+        else
+        {
+            newptr = mm_malloc(newsize);
+            if (newptr == NULL)
+                return NULL;
+            memmove(newptr, oldptr, newsize);
+            mm_free(oldptr);
+            return newptr;
+        }
+    }
 }
 
 /**
